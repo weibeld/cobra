@@ -381,7 +381,7 @@ func writeFlag(buf *bytes.Buffer, flag *pflag.Flag, cmd *Command) {
 	format += "\")\n"
 	buf.WriteString(fmt.Sprintf(format, name))
 	if len(flag.NoOptDefVal) == 0 {
-		format = "    two_word_flags+=(\"--%s\")\n"
+		format = "    two_word_flags+=(\"--%s=\")\n"
 		buf.WriteString(fmt.Sprintf(format, name))
 	}
 	writeFlagHandler(buf, "--"+name, flag.Annotations, cmd)

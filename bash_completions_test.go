@@ -188,7 +188,7 @@ func TestBashCompletions(t *testing.T) {
 	checkRegex(t, output, fmt.Sprintf(`_root_echo\(\)\n{[^}]*flags_completion\+=\("__%s_handle_subdirs_in_dir_flag config"\)`, rootCmd.Name()))
 
 	// check two word flags
-	check(t, output, `two_word_flags+=("--two")`)
+	check(t, output, `two_word_flags+=("--two=")`)
 	check(t, output, `two_word_flags+=("-t")`)
 	checkOmit(t, output, `two_word_flags+=("--two-w-default")`)
 	checkOmit(t, output, `two_word_flags+=("-T")`)

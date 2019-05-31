@@ -347,9 +347,21 @@ fi
 	buf.WriteString("# ex: ts=4 sw=4 et filetype=sh\n")
 }
 
+func writeResets(buf *bytes.Buffer) {
+	buf.WriteString(`
+    commands=()
+    command_aliases=()
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+    must_have_one_flag=()
+    must_have_one_noun=()
+`)
+}
+
 func writeCommands(buf *bytes.Buffer, cmd *Command) {
-	buf.WriteString("    commands=()\n")
-	buf.WriteString("    command_aliases=()\n")
 	for _, c := range cmd.Commands() {
 		if !c.IsAvailableCommand() || c == cmd.helpCommand {
 			continue
@@ -432,13 +444,6 @@ func writeLocalNonPersistentFlag(buf *bytes.Buffer, flag *pflag.Flag) {
 }
 
 func writeFlags(buf *bytes.Buffer, cmd *Command) {
-	buf.WriteString(`    flags=()
-    two_word_flags=()
-    local_nonpersistent_flags=()
-    flags_with_completion=()
-    flags_completion=()
-
-`)
 	localNonPersistentFlags := cmd.LocalNonPersistentFlags()
 	cmd.NonInheritedFlags().VisitAll(func(flag *pflag.Flag) {
 		if nonCompletableFlag(flag) {
@@ -466,7 +471,6 @@ func writeFlags(buf *bytes.Buffer, cmd *Command) {
 }
 
 func writeRequiredFlag(buf *bytes.Buffer, cmd *Command) {
-	buf.WriteString("    must_have_one_flag=()\n")
 	flags := cmd.NonInheritedFlags()
 	flags.VisitAll(func(flag *pflag.Flag) {
 		if nonCompletableFlag(flag) {
@@ -491,7 +495,6 @@ func writeRequiredFlag(buf *bytes.Buffer, cmd *Command) {
 }
 
 func writeValidArgs(buf *bytes.Buffer, cmd *Command) {
-	buf.WriteString("    must_have_one_noun=()\n")
 	sort.Sort(sort.StringSlice(cmd.ValidArgs))
 	for _, value := range cmd.ValidArgs {
 		buf.WriteString(fmt.Sprintf("    must_have_one_noun+=(%q)\n", value))
@@ -539,6 +542,7 @@ func gen(buf *bytes.Buffer, cmd *Command) {
 	}
 
 	buf.WriteString(fmt.Sprintf("    last_command=%q\n", commandName))
+	writeResets(buf)
 	writeCommands(buf, cmd)
 	writeFlags(buf, cmd)
 	writeRequiredFlag(buf, cmd)

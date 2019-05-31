@@ -372,7 +372,7 @@ func writeCommands(buf *bytes.Buffer, cmd *Command) {
 	buf.WriteString("\n")
 }
 
-func writeFlagHandler(buf *bytes.Buffer, name string, annotations map[string][]string, cmd *Command) {
+/*func writeFlagHandler(buf *bytes.Buffer, name string, annotations map[string][]string, cmd *Command) {
 	for key, value := range annotations {
 		switch key {
 		case BashCompFilenameExt:
@@ -441,9 +441,108 @@ func writeLocalNonPersistentFlag(buf *bytes.Buffer, flag *pflag.Flag) {
 	}
 	format += "\")\n"
 	buf.WriteString(fmt.Sprintf(format, name))
-}
+}*/
 
 func writeFlags(buf *bytes.Buffer, cmd *Command) {
+	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+
+		// Ignore hidden or deprecated flags
+		if flag.Hidden || flag.Deprecated != "" {
+			return
+		}
+
+		// All flags are in 'flags'
+		writeFlag(buf, flag, "flags")
+
+		// Flags that require a value are in 'two_word_flags'
+		if flag.NoOptDefVal == "" {
+			writeFlag(buf, flag, "two_word_flags")
+		}
+
+		// Local non-persistent flags are in 'local_nonpersistent_flags'
+		if cmd.LocalNonPersistentFlags().Lookup(flag.Name) != nil {
+			writeFlag(buf, flag, "local_nonpersistent_flags")
+		}
+
+		// Further categorizations of flags are made through annotations
+		for key, value := range flag.Annotations {
+			switch key {
+
+			// Flags whose value should be completed with filenames with a given ext
+			case BashCompFilenameExt:
+				// Flag goes to 'flags_with_completion'
+				writeFlag(buf, flag, "flags_with_completion")
+				// Code for completion of the value goes to 'flags_completion'
+				var bashCode string
+				if len(value) > 0 {
+					bashCode = fmt.Sprintf("__%s_handle_filename_extension_flag ", cmd.Root().Name()) + strings.Join(value, "|")
+				} else {
+					bashCode = "_filedir"
+				}
+				buf.WriteString(fmt.Sprintf("    flags_completion+=(%q)\n", bashCode))
+				if flag.Shorthand != "" {
+					buf.WriteString(fmt.Sprintf("    flags_completion+=(%q)\n", bashCode))
+				}
+
+			// Flags whose value should be completed with custom Bash code
+			case BashCompCustom:
+				// Flag goes to 'flags_with_completion'
+				writeFlag(buf, flag, "flags_with_completion")
+				// Code for completion of the value goes to 'flags_completion'
+				var bashCode string
+				if len(value) > 0 {
+					bashCode = strings.Join(value, "; ")
+				} else {
+					bashCode = ":"
+				}
+				buf.WriteString(fmt.Sprintf("    flags_completion+=(%s)\n", bashCode))
+				if flag.Shorthand != "" {
+					buf.WriteString(fmt.Sprintf("    flags_completion+=(%s)\n", bashCode))
+				}
+
+			// ...
+			case BashCompSubdirsInDir:
+				// Flag goes to 'flags_with_completion'
+				writeFlag(buf, flag, "flags_with_completion")
+				// Code for completion of the value goes to 'flags_completion'
+				var bashCode string
+				if len(value) == 1 {
+					bashCode = fmt.Sprintf("__%s_handle_subdirs_in_dir_flag ", cmd.Root().Name()) + value[0]
+				} else {
+					bashCode = "_filedir -d"
+				}
+				buf.WriteString(fmt.Sprintf("    flags_completion+=(%q)\n", bashCode))
+				if flag.Shorthand != "" {
+					buf.WriteString(fmt.Sprintf("    flags_completion+=(%q)\n", bashCode))
+				}
+
+			// Flags that are required for THIS command
+			case BashCompOneRequiredFlag:
+				if cmd.NonInheritedFlags().Lookup(flag.Name) != nil {
+					writeFlag(buf, flag, "must_have_one_flag")
+				}
+			}
+		}
+	})
+}
+
+func writeFlag(buf *bytes.Buffer, flag *pflag.Flag, category string) {
+	// If the flag requires a value, append a =
+	if flag.NoOptDefVal == "" {
+		buf.WriteString(fmt.Sprintf("    %s+=(\"--%s=\")\n", category, flag.Name))
+		if flag.Shorthand != "" {
+			buf.WriteString(fmt.Sprintf("    %s+=(\"-%s=\")\n", category, flag.Shorthand))
+		}
+		// If the flag requires no value (boolean flag), don't append a =
+	} else {
+		buf.WriteString(fmt.Sprintf("    %s+=(\"--%s\")\n", category, flag.Name))
+		if flag.Shorthand != "" {
+			buf.WriteString(fmt.Sprintf("    %s+=(\"-%s\")\n", category, flag.Shorthand))
+		}
+	}
+}
+
+/*func writeFlags(buf *bytes.Buffer, cmd *Command) {
 	localNonPersistentFlags := cmd.LocalNonPersistentFlags()
 	cmd.NonInheritedFlags().VisitAll(func(flag *pflag.Flag) {
 		if nonCompletableFlag(flag) {
@@ -492,7 +591,7 @@ func writeRequiredFlag(buf *bytes.Buffer, cmd *Command) {
 			}
 		}
 	})
-}
+}*/
 
 func writeValidArgs(buf *bytes.Buffer, cmd *Command) {
 	sort.Sort(sort.StringSlice(cmd.ValidArgs))
@@ -545,7 +644,7 @@ func gen(buf *bytes.Buffer, cmd *Command) {
 	writeResets(buf)
 	writeCommands(buf, cmd)
 	writeFlags(buf, cmd)
-	writeRequiredFlag(buf, cmd)
+	//writeRequiredFlag(buf, cmd)
 	writeValidArgs(buf, cmd)
 	writeArgAliases(buf, cmd)
 	buf.WriteString(fmt.Sprintf("    __%s_debug_command_state \"${FUNCNAME[0]}\"\n}\n\n", cmd.Root().Name()))
@@ -576,9 +675,9 @@ func (c *Command) GenBashCompletionFile(filename string) error {
 	return c.GenBashCompletion(outFile)
 }
 
-func nonCompletableFlag(flag *pflag.Flag) bool {
+/*func nonCompletableFlag(flag *pflag.Flag) bool {
 	return flag.Hidden || len(flag.Deprecated) > 0
-}
+}*/
 
 // Adds the BashCompOneRequiredFlag annotation to a flag if it exists, which
 // causes your command to report an error if invoked without the flag.

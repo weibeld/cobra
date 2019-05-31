@@ -31,12 +31,33 @@ __%[1]s_debug()
 }
 
 __%[1]s_debug_func_entry() {
-	local funcname=$1
-	local red='\e[31;1m' blue='\e[34;1m' green='\e[32;1m' reset='\e[0m'
-	local wordscopy=("${words[@]}")
-	wordscopy["$c"]="$green${words[$c]}$blue"
-	__%[1]s_debug "$red$funcname:$reset ${green}c=$c$reset, words=$blue[${wordscopy[@]}]$reset, cur=$cur, cword=$cword, prev=$prev"
+    local red='\e[31;1m' blue='\e[34;1m' green='\e[32;1m' reset='\e[0m'
+    local wordscopy=("${words[@]}")
+    wordscopy["$c"]="$green${words[$c]}$blue"
+    __%[1]s_debug "$red$1:$reset ${green}c=$c$reset, words=$blue[${wordscopy[@]}]$reset, cur=$cur, cword=$cword, prev=$prev"
 }
+
+__%[1]s_debug_command_state() {
+  local red='\e[31;1m' reset='\e[0m'
+     __%[1]s_debug "$red$1:$reset
+  commands = [${commands[@]}]
+  command_aliases = [${command_aliases[@]}]
+  flags= [${flags[@]}]
+  two_word_flags = [${two_word_flags[@]}]
+  local_nonpersistent_flags= [${local_nonpersistent_flags[@]}]
+  flags_with_completion = [${flags_with_completion[@]}]
+  flags_completion = [${flags_completion[@]}]
+  must_have_one_flag = [${must_have_one_flag[@]}]
+  must_have_one_noun = [${must_have_one_noun[@]}]
+  noun_aliases= [${noun_aliases[@]}]
+  aliashash = keys[${!aliashash[@]}] values[${aliashash[@]}]"
+}
+
+__%[1]s_debug_compreply() {
+    local red='\e[31;1m' green='\e[32;1m' reset='\e[0m'
+    __%[1]s_debug "$red$1:$reset COMPREPLY=$green[${COMPREPLY[@]}]$reset\n"
+}
+
 
 # Homebrew on Macs have version 1.3 of bash-completion which doesn't include
 # _init_completion. This is a very minimal version of that function.
@@ -67,6 +88,7 @@ __%[1]s_contains_word()
     return 1
 }
 
+# Called when the cursor word (i.e. the word to be completed) is parsed (c==cword)
 __%[1]s_handle_reply()
 {
     __%[1]s_debug_func_entry "${FUNCNAME[0]}"
@@ -106,6 +128,7 @@ __%[1]s_handle_reply()
                     fi
                 fi
             fi
+            __%[1]s_debug_compreply "${FUNCNAME[0]}"
             return 0;
             ;;
     esac
@@ -115,11 +138,13 @@ __%[1]s_handle_reply()
     __%[1]s_index_of_word "${prev}" "${flags_with_completion[@]}"
     if [[ ${index} -ge 0 ]]; then
         ${flags_completion[${index}]}
+        __%[1]s_debug_compreply "${FUNCNAME[0]}"
         return
     fi
 
     # we are parsing a flag and don't have a special handler, no completion
     if [[ ${cur} != "${words[cword]}" ]]; then
+        __%[1]s_debug_compreply "${FUNCNAME[0]}"
         return
     fi
 
@@ -157,6 +182,7 @@ __%[1]s_handle_reply()
     if [[ "${#COMPREPLY[@]}" -eq "1" ]] && [[ $(type -t compopt) = "builtin" ]] && [[ "${COMPREPLY[0]}" == --*= ]]; then
        compopt -o nospace
     fi
+    __%[1]s_debug_compreply "${FUNCNAME[0]}"
 }
 
 # The arguments should be in the form "ext1|ext2|extn"
@@ -185,7 +211,6 @@ __%[1]s_handle_flag()
         flagname=${flagname%%=*} # strip everything after the =
         flagname="${flagname}=" # but put the = back
     fi
-    __%[1]s_debug "${FUNCNAME[0]}: looking for ${flagname}"
     if __%[1]s_contains_word "${flagname}" "${must_have_one_flag[@]}"; then
         must_have_one_flag=()
     fi
@@ -250,7 +275,6 @@ __%[1]s_handle_command()
         fi
     fi
     c=$((c+1))
-    __%[1]s_debug "${FUNCNAME[0]}: looking for ${next_command}"
     declare -F "$next_command" >/dev/null && $next_command
 }
 
@@ -325,6 +349,7 @@ fi
 
 func writeCommands(buf *bytes.Buffer, cmd *Command) {
 	buf.WriteString("    commands=()\n")
+	buf.WriteString("    command_aliases=()\n")
 	for _, c := range cmd.Commands() {
 		if !c.IsAvailableCommand() || c == cmd.helpCommand {
 			continue
@@ -465,7 +490,7 @@ func writeRequiredFlag(buf *bytes.Buffer, cmd *Command) {
 	})
 }
 
-func writeRequiredNouns(buf *bytes.Buffer, cmd *Command) {
+func writeValidArgs(buf *bytes.Buffer, cmd *Command) {
 	buf.WriteString("    must_have_one_noun=()\n")
 	sort.Sort(sort.StringSlice(cmd.ValidArgs))
 	for _, value := range cmd.ValidArgs {
@@ -514,16 +539,12 @@ func gen(buf *bytes.Buffer, cmd *Command) {
 	}
 
 	buf.WriteString(fmt.Sprintf("    last_command=%q\n", commandName))
-	buf.WriteString("\n")
-	buf.WriteString("    command_aliases=()\n")
-	buf.WriteString("\n")
-
 	writeCommands(buf, cmd)
 	writeFlags(buf, cmd)
 	writeRequiredFlag(buf, cmd)
-	writeRequiredNouns(buf, cmd)
+	writeValidArgs(buf, cmd)
 	writeArgAliases(buf, cmd)
-	buf.WriteString("}\n\n")
+	buf.WriteString(fmt.Sprintf("    __%s_debug_command_state \"${FUNCNAME[0]}\"\n}\n\n", cmd.Root().Name()))
 }
 
 // GenBashCompletion generates bash completion file and writes to the passed writer.

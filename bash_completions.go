@@ -361,6 +361,33 @@ func writeResets(buf *bytes.Buffer) {
 `)
 }
 
+func writeCommandFunctions(buf *bytes.Buffer, cmd *Command) {
+	for _, c := range cmd.Commands() {
+		if !c.IsAvailableCommand() || c == cmd.helpCommand {
+			continue
+		}
+		writeCommandFunctions(buf, c)
+	}
+	commandName := cmd.CommandPath()
+	commandName = strings.Replace(commandName, " ", "_", -1)
+	commandName = strings.Replace(commandName, ":", "__", -1)
+
+	if cmd.Root() == cmd {
+		buf.WriteString(fmt.Sprintf("_%s_root_command()\n{\n", commandName))
+	} else {
+		buf.WriteString(fmt.Sprintf("_%s()\n{\n", commandName))
+	}
+
+	buf.WriteString(fmt.Sprintf("    last_command=%q\n", commandName))
+	writeResets(buf)
+	writeCommands(buf, cmd)
+	writeFlags(buf, cmd)
+	//writeRequiredFlag(buf, cmd)
+	writeValidArgs(buf, cmd)
+	writeArgAliases(buf, cmd)
+	buf.WriteString(fmt.Sprintf("    __%s_debug_command_state \"${FUNCNAME[0]}\"\n}\n\n", cmd.Root().Name()))
+}
+
 func writeCommands(buf *bytes.Buffer, cmd *Command) {
 	for _, c := range cmd.Commands() {
 		if !c.IsAvailableCommand() || c == cmd.helpCommand {
@@ -369,6 +396,22 @@ func writeCommands(buf *bytes.Buffer, cmd *Command) {
 		buf.WriteString(fmt.Sprintf("    commands+=(%q)\n", c.Name()))
 		writeCmdAliases(buf, c)
 	}
+	buf.WriteString("\n")
+}
+
+func writeCmdAliases(buf *bytes.Buffer, cmd *Command) {
+	if len(cmd.Aliases) == 0 {
+		return
+	}
+
+	sort.Sort(sort.StringSlice(cmd.Aliases))
+
+	buf.WriteString(fmt.Sprint(`    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then`, "\n"))
+	for _, value := range cmd.Aliases {
+		buf.WriteString(fmt.Sprintf("        command_aliases+=(%q)\n", value))
+		buf.WriteString(fmt.Sprintf("        aliashash[%q]=%q\n", value, cmd.Name()))
+	}
+	buf.WriteString(`    fi`)
 	buf.WriteString("\n")
 }
 
@@ -600,54 +643,12 @@ func writeValidArgs(buf *bytes.Buffer, cmd *Command) {
 	}
 }
 
-func writeCmdAliases(buf *bytes.Buffer, cmd *Command) {
-	if len(cmd.Aliases) == 0 {
-		return
-	}
-
-	sort.Sort(sort.StringSlice(cmd.Aliases))
-
-	buf.WriteString(fmt.Sprint(`    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then`, "\n"))
-	for _, value := range cmd.Aliases {
-		buf.WriteString(fmt.Sprintf("        command_aliases+=(%q)\n", value))
-		buf.WriteString(fmt.Sprintf("        aliashash[%q]=%q\n", value, cmd.Name()))
-	}
-	buf.WriteString(`    fi`)
-	buf.WriteString("\n")
-}
 func writeArgAliases(buf *bytes.Buffer, cmd *Command) {
 	buf.WriteString("    noun_aliases=()\n")
 	sort.Sort(sort.StringSlice(cmd.ArgAliases))
 	for _, value := range cmd.ArgAliases {
 		buf.WriteString(fmt.Sprintf("    noun_aliases+=(%q)\n", value))
 	}
-}
-
-func gen(buf *bytes.Buffer, cmd *Command) {
-	for _, c := range cmd.Commands() {
-		if !c.IsAvailableCommand() || c == cmd.helpCommand {
-			continue
-		}
-		gen(buf, c)
-	}
-	commandName := cmd.CommandPath()
-	commandName = strings.Replace(commandName, " ", "_", -1)
-	commandName = strings.Replace(commandName, ":", "__", -1)
-
-	if cmd.Root() == cmd {
-		buf.WriteString(fmt.Sprintf("_%s_root_command()\n{\n", commandName))
-	} else {
-		buf.WriteString(fmt.Sprintf("_%s()\n{\n", commandName))
-	}
-
-	buf.WriteString(fmt.Sprintf("    last_command=%q\n", commandName))
-	writeResets(buf)
-	writeCommands(buf, cmd)
-	writeFlags(buf, cmd)
-	//writeRequiredFlag(buf, cmd)
-	writeValidArgs(buf, cmd)
-	writeArgAliases(buf, cmd)
-	buf.WriteString(fmt.Sprintf("    __%s_debug_command_state \"${FUNCNAME[0]}\"\n}\n\n", cmd.Root().Name()))
 }
 
 // GenBashCompletion generates bash completion file and writes to the passed writer.
@@ -657,7 +658,7 @@ func (c *Command) GenBashCompletion(w io.Writer) error {
 	if len(c.BashCompletionFunction) > 0 {
 		buf.WriteString(c.BashCompletionFunction + "\n")
 	}
-	gen(buf, c)
+	writeCommandFunctions(buf, c)
 	writePostscript(buf, c.Name())
 
 	_, err := buf.WriteTo(w)

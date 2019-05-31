@@ -148,19 +148,58 @@ func TestBashCompletions(t *testing.T) {
 	echoCmd.AddCommand(timesCmd)
 	rootCmd.AddCommand(echoCmd, printCmd, deprecatedCmd, colonCmd)
 
+	// Generate completion script
 	buf := new(bytes.Buffer)
 	rootCmd.GenBashCompletion(buf)
 	output := buf.String()
 
-	check(t, output, "_root")
-	check(t, output, "_root_echo")
-	check(t, output, "_root_echo_times")
-	check(t, output, "_root_print")
-	check(t, output, "_root_cmd__colon")
+	// Check for presence of command functions
+	check(t, output, "_root_root_command()")
+	check(t, output, "_root_echo()")
+	check(t, output, "_root_echo_times()")
+	check(t, output, "_root_print()")
+	check(t, output, "_root_cmd__colon()")
 
-	// check for required flags
+	// Check for short versions of flags
+	check(t, output, `flags+=("--introot=")`)
+	check(t, output, `flags+=("-i")`)
+	check(t, output, `flags+=("--two=")`)
+	check(t, output, `flags+=("-t")`)
+	check(t, output, `flags+=("--two-w-default")`) // No "="!
+	check(t, output, `flags+=("-T")`)
+
+	// Check for required vs optional flags
 	check(t, output, `must_have_one_flag+=("--introot=")`)
 	check(t, output, `must_have_one_flag+=("--persistent-filename=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--two=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--filename=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--filename-ext=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--custom=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--theme=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--config=")`)
+	checkOmit(t, output, `must_have_one_flag+=("--two-w-default")`) // No "="!
+
+	// Check two-word vs boolean flags
+	check(t, output, `two_word_flags+=("--introot=")`)
+	check(t, output, `two_word_flags+=("--persistent-filename=")`)
+	check(t, output, `two_word_flags+=("--two=")`)
+	check(t, output, `two_word_flags+=("--filename=")`)
+	check(t, output, `two_word_flags+=("--filename-ext=")`)
+	check(t, output, `two_word_flags+=("--custom=")`)
+	check(t, output, `two_word_flags+=("--theme=")`)
+	check(t, output, `two_word_flags+=("--config=")`)
+	checkOmit(t, output, `two_word_flags+=("--two-w-default")`) // No "="!
+
+	// Check persistent vs non-persistent flags
+	check(t, output, `local_nonpersistent_flags+=("--filename=")`)
+	check(t, output, `local_nonpersistent_flags+=("--filename-ext=")`)
+	check(t, output, `local_nonpersistent_flags+=("--custom=")`)
+	check(t, output, `local_nonpersistent_flags+=("--theme=")`)
+	check(t, output, `local_nonpersistent_flags+=("--two=")`)
+	check(t, output, `local_nonpersistent_flags+=("--two-w-default")`) // No "="!
+	check(t, output, `local_nonpersistent_flags+=("--config=")`)
+	checkOmit(t, output, `local_nonpersistent_flags+=("--persistent-filename=")`)
+
 	// check for custom completion function with both qualified and unqualified name
 	checkNumOccurrences(t, output, `__custom_func`, 2)      // 1. check existence, 2. invoke
 	checkNumOccurrences(t, output, `__root_custom_func`, 3) // 1. check existence, 2. invoke, 3. actual definition
@@ -186,12 +225,6 @@ func TestBashCompletions(t *testing.T) {
 	check(t, output, fmt.Sprintf(`flags_completion+=("__%s_handle_subdirs_in_dir_flag themes")`, rootCmd.Name()))
 	// check for subdirs_in_dir flags in a subcommand
 	checkRegex(t, output, fmt.Sprintf(`_root_echo\(\)\n{[^}]*flags_completion\+=\("__%s_handle_subdirs_in_dir_flag config"\)`, rootCmd.Name()))
-
-	// check two word flags
-	check(t, output, `two_word_flags+=("--two=")`)
-	check(t, output, `two_word_flags+=("-t")`)
-	checkOmit(t, output, `two_word_flags+=("--two-w-default")`)
-	checkOmit(t, output, `two_word_flags+=("-T")`)
 
 	checkOmit(t, output, deprecatedCmd.Name())
 

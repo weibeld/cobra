@@ -25,8 +25,17 @@ func writePreamble(buf *bytes.Buffer, name string) {
 __%[1]s_debug()
 {
     if [[ -n ${BASH_COMP_DEBUG_FILE} ]]; then
-        echo "$*" >> "${BASH_COMP_DEBUG_FILE}"
+        # -e is necessary for color escape sequences
+        echo -e "$*" >> "${BASH_COMP_DEBUG_FILE}"
     fi
+}
+
+__%[1]s_debug_func_entry() {
+	local funcname=$1
+	local red='\e[31;1m' blue='\e[34;1m' green='\e[32;1m' reset='\e[0m'
+	local wordscopy=("${words[@]}")
+	wordscopy["$c"]="$green${words[$c]}$blue"
+	__%[1]s_debug "$red$funcname:$reset ${green}c=$c$reset, words=$blue[${wordscopy[@]}]$reset, cur=$cur, cword=$cword, prev=$prev"
 }
 
 # Homebrew on Macs have version 1.3 of bash-completion which doesn't include
@@ -60,7 +69,7 @@ __%[1]s_contains_word()
 
 __%[1]s_handle_reply()
 {
-    __%[1]s_debug "${FUNCNAME[0]}"
+    __%[1]s_debug_func_entry "${FUNCNAME[0]}"
     case $cur in
         -*)
             if [[ $(type -t compopt) = "builtin" ]]; then
@@ -165,7 +174,7 @@ __%[1]s_handle_subdirs_in_dir_flag()
 
 __%[1]s_handle_flag()
 {
-    __%[1]s_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+    __%[1]s_debug_func_entry "${FUNCNAME[0]}"
 
     # if a command required a flag, and we found it, unset must_have_one_flag()
     local flagname=${words[c]}
@@ -214,7 +223,7 @@ __%[1]s_handle_flag()
 
 __%[1]s_handle_noun()
 {
-    __%[1]s_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+    __%[1]s_debug_func_entry "${FUNCNAME[0]}"
 
     if __%[1]s_contains_word "${words[c]}" "${must_have_one_noun[@]}"; then
         must_have_one_noun=()
@@ -228,7 +237,7 @@ __%[1]s_handle_noun()
 
 __%[1]s_handle_command()
 {
-    __%[1]s_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+    __%[1]s_debug_func_entry "${FUNCNAME[0]}"
 
     local next_command
     if [[ -n ${last_command} ]]; then
@@ -247,11 +256,11 @@ __%[1]s_handle_command()
 
 __%[1]s_handle_word()
 {
+    __%[1]s_debug_func_entry "${FUNCNAME[0]}"
     if [[ $c -ge $cword ]]; then
         __%[1]s_handle_reply
         return
     fi
-    __%[1]s_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
     if [[ "${words[c]}" == -* ]]; then
         __%[1]s_handle_flag
     elif __%[1]s_contains_word "${words[c]}" "${commands[@]}"; then

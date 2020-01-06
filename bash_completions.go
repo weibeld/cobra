@@ -233,7 +233,7 @@ __%[1]s_handle_flag()
     fi
 
     # skip the argument to a two word flag
-    if [[ ${words[c]} != *"="* ]] && __%[1]s_contains_word "${words[c]}" "${two_word_flags[@]%=}"; then
+    if [[ ${words[c]} != *"="* ]] && __%[1]s_contains_word "${words[c]}" "${two_word_flags[@]}"; then
 			  __%[1]s_debug "${FUNCNAME[0]}: found a flag ${words[c]}, skip the next argument"
         c=$((c+1))
         # if we are looking for a flags value, don't show commands
@@ -538,9 +538,9 @@ func writeFlags(buf *bytes.Buffer, cmd *Command) {
 				} else {
 					bashCode = ":"
 				}
-				buf.WriteString(fmt.Sprintf("    flags_completion+=(%s)\n", bashCode))
+				buf.WriteString(fmt.Sprintf("    flags_completion+=(%q)\n", bashCode))
 				if flag.Shorthand != "" {
-					buf.WriteString(fmt.Sprintf("    flags_completion+=(%s)\n", bashCode))
+					buf.WriteString(fmt.Sprintf("    flags_completion+=(%q)\n", bashCode))
 				}
 
 			// ...
